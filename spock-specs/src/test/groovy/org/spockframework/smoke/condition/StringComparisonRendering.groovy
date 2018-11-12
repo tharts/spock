@@ -17,6 +17,7 @@
 package org.spockframework.smoke.condition
 
 import org.spockframework.runtime.ExpressionInfoValueRenderer
+import org.spockframework.runtime.FailedStringComparisonRenderer
 import spock.lang.Issue
 
 class StringComparisonRendering extends ConditionRenderingSpec {
@@ -57,12 +58,12 @@ null == "foo"
     expect:
     isRendered """
 ("the quick" == "the quirk") instanceof String
-             |               |
-             |               false
+             |               |          |
+             |               false      class java.lang.String
              false
              1 difference (88% similarity)
              the qui(c)k
-             the qui(r)k
+             the qui(r)k (java.lang.Boolean)
     """, {
       assert ("the quick" == "the quirk") instanceof String
     }
@@ -73,8 +74,9 @@ null == "foo"
     expect:
     isRendered """
 ("the quick" == "the quick") instanceof String
-             |               |
-             true            false
+             |               |          |
+             |               false      class java.lang.String
+             true (java.lang.Boolean)
     """, {
       assert ("the quick" == "the quick") instanceof String
     }
@@ -162,8 +164,170 @@ null == "foo"
       "Strings too large to calculate edit distance.")
   }
 
-  private StringBuilder largeStringBuilder(CharSequence source = "aaaaaaaaaaaaaaaa") {
-    int length = ExpressionInfoValueRenderer.MAX_EDIT_DISTANCE_MEMORY / 2
+
+  def "large String comparision without room for context"() {
+    int stringLength = Math.sqrt(FailedStringComparisonRenderer.MAX_EDIT_DISTANCE_MEMORY)
+
+    String common = largeStringBuilder("cccccccccccccccc", stringLength)
+    String a = largeStringBuilder("aaaaaaaaaaaaaaaa", stringLength) + common
+    String b = largeStringBuilder("bbbbbbbbbbbbbbbb", stringLength) + common
+
+
+    expect:
+    renderedConditionContains({
+      assert a == b
+    },
+      "false",
+      a,
+      b,
+      "$stringLength differences (0% similarity) (comparing subset start: 0, end1: $stringLength, end2: $stringLength)")
+  }
+
+
+  def "String diff does not cause int overflow when shortening, causing OOM"() {
+    int stringLength = Math.sqrt(Integer.MAX_VALUE) * 2
+
+    String a = largeStringBuilder("aaaaaaaaaaaaaaaa", stringLength)
+    String b = largeStringBuilder("bbbbbbbbbbbbbbbb", stringLength)
+
+
+    expect:
+    renderedConditionContains({
+      assert a == b
+    },
+      "false",
+      "Strings too large to calculate edit distance.")
+  }
+
+
+  @Issue("https://github.com/spockframework/spock/issues/737")
+  def 'shows differences between string literals with line breaks'() {
+    expect:
+    isRendered '''
+"""foo """ == """bar """
+           |
+           false
+           4 differences (20% similarity)
+           (foo)\\n(-~)
+           (bar)\\n(\\n)
+''', {
+      assert """foo
+""" == """bar
+
+"""
+    }
+  }
+
+  @Issue("https://github.com/spockframework/spock/issues/737")
+  def 'shows differences between string literals with newline escapes'() {
+    expect:
+    isRendered '''
+"""foo  """ == """bar  """
+            |
+            false
+            3 differences (40% similarity)
+            (foo)  
+            (bar)  
+''', {
+      assert """\
+foo  \
+""" == """\
+bar  \
+"""
+    }
+  }
+
+  @Issue("https://github.com/spockframework/spock/issues/737")
+  def 'shows differences between string literals with line breaks and newline escapes'() {
+    expect:
+    isRendered '''
+"""\\\\ foo""" == """\\\\ foo """
+             |
+             false
+             8 differences (38% similarity)
+             \\\\\\nfoo(--------~)
+             \\\\\\nfoo(       \\n)
+''', {
+      assert """\\
+foo\
+""" == """\\
+foo       
+"""
+    }
+  }
+
+  @Issue("https://github.com/spockframework/spock/issues/737")
+  def 'shows differences between interpolated string literals with line breaks and newline escapes'() {
+    given:
+    def a = 'foo'
+    def b = 'bar'
+
+    expect:
+    isRendered '''
+"""$a """ == """\\\\$b """
+    |     |        |
+    foo   |        bar
+          false
+          5 differences (16% similarity)
+          (f~oo--)\\n
+          (\\\\bar )\\n
+''', {
+      assert """\
+$a\
+
+""" == """\\\
+$b 
+"""
+    }
+  }
+
+  @Issue("https://github.com/spockframework/spock/issues/737")
+  def 'shows differences between long string literals with line breaks and newline escapes'() {
+    expect:
+    isRendered '''
+"""Lorem ipsum Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.""" == """Lorem ipsum Lorem ipsum  dolor sit amet,  consetetur sadipscing elitr, sed  diam nonumy eirmod tempor  invidunt ut labore et  dolore magna aliquyam erat, sed diam voluptua. """
+                                                                                                                                                                              |
+                                                                                                                                                                              false
+                                                                                                                                                                              7 differences (95% similarity)
+                                                                                                                                                                              Lorem ipsum\\n(\\n)Lorem ipsum (-)dolor sit amet, (-)consetetur sadipscing elitr, sed (-)diam nonumy eirmod tempor (-)invidunt ut labore et (-)dolore magna aliquyam erat, sed diam voluptua.(-~)
+                                                                                                                                                                              Lorem ipsum\\n(-~)Lorem ipsum ( )dolor sit amet, ( )consetetur sadipscing elitr, sed ( )diam nonumy eirmod tempor ( )invidunt ut labore et ( )dolore magna aliquyam erat, sed diam voluptua.(\\n)
+''', {
+      assert """\
+Lorem ipsum
+
+Lorem ipsum\
+ dolor sit amet, \
+consetetur sadipscing elitr, sed\
+\
+ diam nonumy eirmod tempor \
+\
+\
+invidunt ut labore et\
+ \
+\
+dolore magna aliquyam erat, sed diam voluptua.\
+\
+\
+""" == """Lorem ipsum
+Lorem ipsum \
+ dolor sit amet, \
+ consetetur sadipscing elitr, sed\
+ \
+ diam nonumy eirmod tempor \
+\
+ \
+invidunt ut labore et\
+ \
+ \
+dolore magna aliquyam erat, sed diam voluptua.\
+
+\
+\
+"""
+    }
+  }
+
+  private StringBuilder largeStringBuilder(CharSequence source = "aaaaaaaaaaaaaaaa", int length = FailedStringComparisonRenderer.MAX_EDIT_DISTANCE_MEMORY / 2) {
     def sb = new StringBuilder(length + 10)
     int cslength = source.length()
     for (int i = 0; i < length; i += cslength) {

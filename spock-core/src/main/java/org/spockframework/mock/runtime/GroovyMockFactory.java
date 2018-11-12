@@ -16,15 +16,16 @@ package org.spockframework.mock.runtime;
 
 import org.spockframework.mock.*;
 import org.spockframework.runtime.GroovyRuntimeUtil;
+import org.spockframework.util.ReflectionUtil;
 import spock.lang.Specification;
 
 import java.lang.reflect.Modifier;
-import java.util.Collections;
+import java.util.*;
 
 import groovy.lang.*;
 
 public class GroovyMockFactory implements IMockFactory {
-  public static GroovyMockFactory INSTANCE = new GroovyMockFactory();
+  public static final GroovyMockFactory INSTANCE = new GroovyMockFactory();
 
   @Override
   public boolean canCreate(IMockConfiguration configuration) {
@@ -42,6 +43,10 @@ public class GroovyMockFactory implements IMockFactory {
         throw new CannotCreateMockException(type,
             ". Global mocking is only possible for classes, but not for interfaces.");
       }
+      if (!configuration.getAdditionalInterfaces().isEmpty()) {
+        throw new CannotCreateMockException(type,
+          ". Global cannot add additionalInterfaces.");
+      }
       GroovyRuntimeUtil.setMetaClass(type, newMetaClass);
       specification.getSpecificationContext().getCurrentIteration().addCleanup(new Runnable() {
         @Override
@@ -53,6 +58,10 @@ public class GroovyMockFactory implements IMockFactory {
     }
 
     if (isFinalClass(type)) {
+      if (!configuration.getAdditionalInterfaces().isEmpty()) {
+        throw new CannotCreateMockException(type,
+          ". Cannot add additionalInterfaces to final classes.");
+      }
       final Object instance = MockInstantiator.instantiate(type,
           type, configuration.getConstructorArgs(), configuration.isUseObjenesis());
       GroovyRuntimeUtil.setMetaClass(instance, newMetaClass);
@@ -61,9 +70,15 @@ public class GroovyMockFactory implements IMockFactory {
     }
 
     IProxyBasedMockInterceptor mockInterceptor = new GroovyMockInterceptor(configuration, specification, newMetaClass);
-    return ProxyBasedMockFactory.INSTANCE.create(type, Collections.<Class<?>>singletonList(GroovyObject.class),
-        configuration.getConstructorArgs(), mockInterceptor, specification.getClass().getClassLoader(),
-        configuration.isUseObjenesis());
+    List<Class<?>> additionalInterfaces = new ArrayList<>(configuration.getAdditionalInterfaces());
+    additionalInterfaces.add(GroovyObject.class);
+    Object proxy = ProxyBasedMockFactory.INSTANCE.create(type, additionalInterfaces,
+      configuration.getConstructorArgs(), mockInterceptor, specification.getClass().getClassLoader(),
+      configuration.isUseObjenesis());
+    if ((configuration.getNature() == MockNature.SPY) && (configuration.getInstance() != null)) {
+      ReflectionUtil.deepCopyFields(configuration.getInstance(), proxy);
+    }
+    return proxy;
   }
 
   private boolean isFinalClass(Class<?> type) {

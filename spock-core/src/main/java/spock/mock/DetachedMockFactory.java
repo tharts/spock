@@ -1,14 +1,23 @@
+/*
+ * Copyright 2017 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package spock.mock;
 
-import org.spockframework.mock.MockImplementation;
-import org.spockframework.mock.MockNature;
-import org.spockframework.mock.MockUtil;
-import org.spockframework.util.Beta;
-import org.spockframework.util.Nullable;
+import org.spockframework.mock.*;
+import org.spockframework.util.*;
 import spock.lang.Specification;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.*;
 
 /**
  * This factory allows the creations of mocks outside of a {@link spock.lang.Specification},
@@ -115,10 +124,10 @@ public class DetachedMockFactory implements MockFactory {
   public <T> T Spy(Class<T> type) {
     return createMock(inferNameFromType(type), type, MockNature.SPY, Collections.<String, Object>emptyMap());
   }
-  
+
   @Override
   public <T> T Spy(T obj) {
-    return createMock(inferNameFromType(obj.getClass()), obj, MockNature.SPY, Collections.<String, Object>emptyMap());
+    return createMock(inferNameFromType(obj.getClass()), obj, MockNature.SPY,  Collections.<String, Object>singletonMap("useObjenesis", true));
   }
 
   /**
@@ -150,7 +159,7 @@ public class DetachedMockFactory implements MockFactory {
     }
     return (T) new MockUtil().createDetachedMock(name, type, nature, MockImplementation.JAVA, options, classLoader);
   }
-  
+
   @SuppressWarnings("unchecked")
   public <T> T createMock(@Nullable String name, T obj, MockNature nature, Map<String, Object> options) {
     ClassLoader classLoader = obj.getClass().getClassLoader();

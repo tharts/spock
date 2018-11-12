@@ -5,7 +5,7 @@ ext.displayName = "Spock Framework - Spring Module"
 description = "Spock's Spring Module makes it possible to use Spring's TestContext framework together with Spock. \
 Supports Spring 2.5.x, 3.x, and 4.x."
 
-def springVersion = "4.1.0.RELEASE"
+def springVersion = "4.3.5.RELEASE"
 
 if (springVersion.startsWith("2.")) {
   sourceSets.test.groovy.exclude "**/*ContextHierarchyExample.groovy"
@@ -25,4 +25,29 @@ dependencies {
 
   testRuntime libs.h2database
   testRuntime libs.log4j
+}
+
+task testCglib(type: Test) {
+  systemProperty("org.spockframework.mock.ignoreByteBuddy", "true")
+  mustRunAfter test
+}
+
+check.dependsOn testCglib
+
+jar {
+  manifest {
+    attributes(
+      'Created-By': "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})".toString(),
+      'Build-Date': buildDate,
+      'Build-Time': buildTime,
+      'Build-Revision': versioning.info.commit,
+      'Specification-Title': project.name,
+      'Specification-Version': baseVersion,
+      'Specification-Vendor': 'spockframework.org',
+      'Implementation-Title': project.name,
+      'Implementation-Version': variantLessVersion,
+      'Implementation-Vendor': 'spockframework.org',
+      'Automatic-Module-Name': 'org.spockframework.spring'
+    )
+  }
 }

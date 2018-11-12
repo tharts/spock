@@ -17,6 +17,7 @@
 package org.spockframework.smoke.condition
 
 import spock.lang.Issue
+
 import static java.lang.Thread.State.NEW
 
 /**
@@ -180,7 +181,7 @@ tiple
 x == null
 | |
 | false
-${x.objectToString()}
+${x.objectToString().replace '$NullToString', '.NullToString'}
     """, {
       assert x == null
     }
@@ -194,7 +195,7 @@ ${x.objectToString()}
 x == null
 | |
 | false
-${x.objectToString()}
+${x.objectToString().replace '$EmptyToString', '.EmptyToString'}
     """, {
       assert x == null
     }
@@ -208,7 +209,7 @@ ${x.objectToString()}
 x == null
 | |
 | false
-${x.objectToString()} (renderer threw UnsupportedOperationException)
+${x.objectToString().replace '$ThrowingToString', '.ThrowingToString'} (renderer threw UnsupportedOperationException)
     """, {
       assert x == null
     }
@@ -216,11 +217,12 @@ ${x.objectToString()} (renderer threw UnsupportedOperationException)
 
   def "enum literal"() {
     expect:
-    isRendered """
+    isRendered '''
 Thread.State.NEW == null
-                 |
-                 false
-    """, {
+       |         |
+       |         false
+       class java.lang.Thread$State
+    ''', {
       assert Thread.State.NEW == null
     }
   }
@@ -238,12 +240,13 @@ NEW == null
 
   def "enum literal with toString"() {
     expect:
-    isRendered """
+    isRendered '''
 EnumWithToString.VALUE == null
-                 |     |
-                 |     false
-                 I'm a value
-    """, {
+|                |     |
+|                |     false
+|                I'm a value
+class org.spockframework.smoke.condition.ValueRendering$EnumWithToString
+    ''', {
       assert EnumWithToString.VALUE == null
     }
   }
@@ -257,6 +260,34 @@ x == null
 NEW
     """, {
       def x = NEW
+      assert x == null
+    }
+  }
+
+  def "variable with default to string is dump()ed"() {
+    def x = new DefaultToString()
+    expect:
+    isRendered """
+x == null
+| |
+| false
+${x.dump()}
+    """, {
+      assert x == null
+    }
+  }
+
+  def "arrays of variables with default to string is dump()ed"() {
+    def a = new DefaultToString()
+    def b = new DefaultToString()
+    DefaultToString[] x = [a, b]
+    expect:
+    isRendered """
+x == null
+| |
+| false
+[${a.dump()}, ${b.dump()}]
+    """, {
       assert x == null
     }
   }
@@ -297,6 +328,11 @@ NEW
     String toString() {
       throw new UnsupportedOperationException()
     }
+  }
+
+
+  static class DefaultToString {
+    int a = 4
   }
 
   enum EnumWithToString {

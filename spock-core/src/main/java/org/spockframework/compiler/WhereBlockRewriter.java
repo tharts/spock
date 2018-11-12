@@ -398,13 +398,16 @@ public class WhereBlockRewriter {
 
   private class DataTablePreviousVariableTransformer extends ClassCodeExpressionTransformer {
     private int depth = 0;
-    private int rowIndex = 0;
+    private int rowIndex = -1;
 
     @Override
     protected SourceUnit getSourceUnit() { return null; }
 
     @Override
     public Expression transform(Expression expression) {
+      if (depth == 0)
+        rowIndex++;
+
       if ((expression instanceof VariableExpression) && isDataProcessorVariable(expression.getText())) {
         return AstUtil.createGetAtMethod(expression, rowIndex);
       }
@@ -412,9 +415,6 @@ public class WhereBlockRewriter {
       depth++;
       Expression transform = super.transform(expression);
       depth--;
-
-      if (depth == 0)
-        rowIndex++;
 
       return transform;
     }
